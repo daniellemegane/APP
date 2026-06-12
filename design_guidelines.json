@@ -1,0 +1,138 @@
+{
+  "theme": "LIGHT",
+  "archetype": "1 (Organic & Earthy)",
+  "emotional_tone": "Warm, elegant, professional, trustworthy, authentically Cameroonian.",
+  "typography": {
+    "font_families": {
+      "heading": "Outfit, sans-serif",
+      "body": "Manrope, sans-serif",
+      "accent": "Cormorant Garamond, serif"
+    },
+    "scale": {
+      "h1": "text-4xl sm:text-5xl lg:text-6xl tracking-tight leading-none",
+      "h2": "text-2xl sm:text-3xl lg:text-4xl tracking-tight",
+      "h3": "text-xl sm:text-2xl",
+      "body": "text-base leading-relaxed",
+      "small": "text-sm",
+      "overline": "text-xs uppercase tracking-[0.2em] font-medium"
+    },
+    "rules": [
+      "Never use Inter, Roboto, or Open Sans.",
+      "Headings must have tight tracking (tracking-tight).",
+      "Use bold/black weights for impact, or light weights for elegance.",
+      "Maintain a 2-step tailwind scale max between heading and subheading."
+    ]
+  },
+  "colors": {
+    "background": "#FDFBF7",
+    "foreground": "#2B3A2C",
+    "primary": {
+      "DEFAULT": "#C85A32",
+      "foreground": "#FFFFFF",
+      "hover": "#A94422"
+    },
+    "secondary": {
+      "DEFAULT": "#DDA74F",
+      "foreground": "#2B3A2C"
+    },
+    "muted": {
+      "DEFAULT": "#F0EBE1",
+      "foreground": "#6B7264"
+    },
+    "border": "#E8E4D9",
+    "surface": "#FFFFFF",
+    "success": "#4A6741",
+    "rules": [
+      "Never use pure black (#000000); use deep forest/charcoal (#2B3A2C).",
+      "Avoid purple/teal gradients entirely.",
+      "Ensure WCAG AA contrast, especially for primary buttons.",
+      "Hover states must be explicitly defined and accessible."
+    ]
+  },
+  "layout_and_spacing": {
+    "spacing_scale": "Tailwind standard, but generously applied (e.g., p-8, p-12, py-24).",
+    "marketing_pages": "Bento 'Tetris' Grid (asymmetrical, wide gap-8 to gap-12, col-span mixing).",
+    "dashboards": "Control Room Grid (dense, gap-4 to gap-6, cardless or sharp 1px borders, h-full stretching).",
+    "rules": [
+      "Grid items must be direct children of the grid container.",
+      "Images must not exceed 80vh on mobile.",
+      "Use optical alignment for icons/buttons."
+    ]
+  },
+  "components": {
+    "marketing_sections": "Use raw HTML/Tailwind for asymmetric, overlapping bento grids.",
+    "interactive_elements": "Use heavily customized Shadcn UI (Forms, Select, Dialog).",
+    "dashboards": "Flat surfaces, minimal shadows, 1px subtle borders (border-border), dense data display.",
+    "cards": "For e-commerce products: simple border-collapse or 1px border, hover:-translate-y-1 hover:shadow-lg.",
+    "header": "Crystal Glassmorphism: bg-white/70, backdrop-blur-xl, border-b border-border/50. Must always have navigation visible on desktop.",
+    "footer": "Massive space (py-20), dark background if page is light, with large typographic brand mark."
+  },
+  "motion": {
+    "rules": [
+      "Hover states on all interactive elements.",
+      "Smooth transition: transform 0.2s ease, opacity 0.2s ease.",
+      "Respect prefers-reduced-motion."
+    ]
+  },
+  "icons": {
+    "library": "lucide-react",
+    "instructions": "Use lucide-react (already installed). Use varied stroke weights to match typography."
+  },
+  "accessibility": {
+    "testing_attributes": "All interactive elements MUST include data-testid (e.g., data-testid='checkout-submit-button').",
+    "focus_states": "Must have high contrast ring (focus:ring-2 focus:ring-primary/50)."
+  },
+  "media_and_images": {
+    "rules": [
+      "Never use placeholder image services like via.placeholder.com.",
+      "Use the provided URLs below for MVP."
+    ],
+    "urls": {
+      "heroes_and_portraits": [
+        {
+          "url": "https://images.unsplash.com/photo-1611432579402-7037e3e2c1e4?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA2MTJ8MHwxfHNlYXJjaHwxfHxhZnJpY2FuJTIwd29tYW4lMjBlbnRyZXByZW5ldXIlMjBwb3J0cmFpdHxlbnwwfHx8fDE3ODEzMDc5OTl8MA&ixlib=rb-4.1.0&q=85",
+          "description": "Smiling woman entrepreneur in yellow blazer - ideal for Vendor Landing Page Hero."
+        },
+        {
+          "url": "https://images.unsplash.com/photo-1563132337-f159f484226c?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA2MTJ8MHwxfHNlYXJjaHwzfHxhZnJpY2FuJTIwd29tYW4lMjBlbnRyZXByZW5ldXIlMjBwb3J0cmFpdHxlbnwwfHx8fDE3ODEzMDc5OTl8MA&ixlib=rb-4.1.0&q=85",
+          "description": "Confident woman in orange blazer - great for 'About Us' or testimonial sections."
+        }
+      ],
+      "products_fashion": [
+        {
+          "url": "https://images.unsplash.com/photo-1709809081557-78f803ce93a0?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA2MjJ8MHwxfHNlYXJjaHw0fHxhZnJpY2FuJTIwZmFzaGlvbiUyMGNsb3RoaW5nfGVufDB8fHx8MTc4MTMwNzk5OXww&ixlib=rb-4.1.0&q=85",
+          "description": "Woman in colorful dress - use as fashion category cover."
+        },
+        {
+          "url": "https://images.unsplash.com/photo-1552710307-537199cd41c0?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA4Mzl8MHwxfHNlYXJjaHwxfHxhZnJpY2FuJTIwZmFicmljfGVufDB8fHx8MTc4MTMwODAwOHww&ixlib=rb-4.1.0&q=85",
+          "description": "Assorted African fabrics/wax patterns - ideal for generic product thumbnails or category backgrounds."
+        }
+      ],
+      "products_cosmetics": [
+        {
+          "url": "https://images.unsplash.com/photo-1612817288484-6f916006741a?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzMzN8MHwxfHNlYXJjaHwyfHxuYXR1cmFsJTIwc2tpbmNhcmUlMjBwcm9kdWN0fGVufDB8fHx8MTc4MTMwODAwOXww&ixlib=rb-4.1.0&q=85",
+          "description": "Natural cosmetics flatlay - use for cosmetics/beauty category."
+        },
+        {
+          "url": "https://images.pexels.com/photos/6635917/pexels-photo-6635917.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+          "description": "Woman enjoying skincare routine - lifestyle image for beauty section."
+        }
+      ],
+      "products_crafts": [
+        {
+          "url": "https://images.unsplash.com/photo-1481061730414-e888962bd2c0?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2NzB8MHwxfHNlYXJjaHwyfHxoYW5kbWFkZSUyMGJhc2tldHxlbnwwfHx8fDE3ODEzMDgwMDl8MA&ixlib=rb-4.1.0&q=85",
+          "description": "Handmade brown wicker basket - use for artisanal/crafts category."
+        }
+      ]
+    }
+  },
+  "instructions_to_main_agent": [
+    "Read this JSON carefully. Strict adherence to the color palette (Terracotta/Ochre/Forest Green) is mandatory to capture the Cameroonian warmth without cliché pinks.",
+    "Implement the UI using React, Tailwind CSS, and Shadcn UI.",
+    "Ensure e-commerce product pages prioritize clean, white backgrounds for products, using the elegant typography specified.",
+    "Build the dashboard (Admin/Vendor/Client) using the 'Control Room Grid' spacing - tight, precise, cardless or 1px border.",
+    "For payments (MTN MoMo, Orange Money, Visa), build simulated UI flows in the checkout.",
+    "Do NOT use 'Inter' font. Import 'Outfit' and 'Manrope' via Google Fonts in your main index.html/CSS.",
+    "Ensure data-testid attributes are comprehensively added across all forms, buttons, and navigation elements."
+  ]
+}
