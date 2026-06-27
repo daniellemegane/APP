@@ -759,6 +759,66 @@ async def check_mtn_payment(reference_id: str, user: dict = Depends(current_user
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erreur vérification: {str(e)}")
+
+
+# ============ RETRAITS ============
+from pydantic import BaseModel as PydanticModel
+
+class RetraitRequest(PydanticModel):
+    montant: float
+    numero_mobile_money: str
+    operateur: str  # mtn | orange
+
+@api.post("/retraits")
+async def demander_retrait(payload: RetraitRequest, user: dict = Depends(role_required("vendor"))):
+    stats = await db.orders.aggregate([
+        {"$match": {"vendor_id": user["id"], "status": "delivered"}},
+        {"$group": {"_id": None, "total": {"$sum": "$vendor_payout"}}}
+    ]).to_list(1)
+    revenus_disponibles = stats[0]["total"] if stats else 0
+
+    retraits_en_cours = await db.retraits.aggregate([
+        {"$match": {"vendor_id": user["id"], "status": {"$in": ["pending", "processing"]}}},
+        {"$group": {"_id": None, "total": {"$sum": "$montant"}}}
+    ]).to_list(1)
+    deja_demande = retraits_en_cours[0]["total"] if retraits_en_cours else 0
+
+    disponible = revenus_disponibles - deja_demande
+    if payload.montant > disponible:
+        raise HTTPException(status_code=400, detail=f"Montant supérieur au solde disponible ({formatPrice_py(disponible)} FCFA)")
+    if payload.montant < 1000:
+        raise HTTPException(status_code=400, detail="Montant minimum : 1 000 FCFA")
+
+    retrait = {
+        "id": new_id(),
+        "vendor_id": user["id"],
+        "vendor_nom": user["full_name"],
+        "montant": payload.montant,
+        "numero_mobile_money": payload.numero_mobile_money,
+        "operateur": payload.operateur,
+        "status": "pending",
+        "created_at": now_iso(),
+    }
+    await db.retraits.insert_one(retrait)
+    retrait.pop("_id", None)
+    return {"message": "Demande de retrait envoyée !", "retrait": retrait}
+
+def formatPrice_py(amount: float) -> str:
+    return f"{int(amount):,}".replace(",", " ")
+@api.get("/retraits/mine")
+async def mes_retraits(user: dict = Depends(role_required("vendor"))):
+    retraits = await db.retraits.find({"vendor_id": user["id"]}, {"_id": 0}).sort([("created_at", -1)]).to_list(100)
+    return retraits
+
+@api.get("/admin/retraits")
+async def admin_retraits(user: dict = Depends(role_required("admin"))):
+    retraits = await db.retraits.find({}, {"_id": 0}).sort([("created_at", -1)]).to_list(500)
+    return retraits
+
+@api.patch("/admin/retraits/{retrait_id}")
+async def maj_retrait(retrait_id: str, status: str, user: dict = Depends(role_required("admin"))):
+    await db.retraits.update_one({"id": retrait_id}, {"$set": {"status": status}})
+    return {"ok": True}
 # ============ Health ============
 @api.get("/")
 async def root():
