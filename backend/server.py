@@ -29,7 +29,12 @@ from models import (
 
 # ============ Setup ============
 mongo_url = os.environ['MONGO_URL']
-client = AsyncIOMotorClient(mongo_url)
+import certifi
+client = AsyncIOMotorClient(
+    mongo_url,
+    tlsCAFile=certifi.where(),
+    serverSelectionTimeoutMS=30000
+)
 db = client[os.environ['DB_NAME']]
 
 app = FastAPI(title="Elles Market API")
