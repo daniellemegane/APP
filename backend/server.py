@@ -7,23 +7,6 @@ load_dotenv(ROOT_DIR / '.env')
 import os
 import logging
 import uuid
-from fastapi import FastAPI
-from starlette.middleware.cors import CORSMiddleware
-
-app = FastAPI()
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[
-        "https://elles-market.acodaf.org",
-        "http://localhost:3000",  # pour le dev local
-        "http://localhost:5173",  # si tu utilises Vite
-    ],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
 from datetime import datetime, timezone
 from typing import Optional, List
 
@@ -43,6 +26,37 @@ from models import (
     ProductCreate, ProductUpdate, CheckoutRequest, OrderStatusUpdate,
     ReviewCreate, BannerCreate, SubscriptionUpgrade, now_iso, new_id,
 )
+
+# ============ Setup ============
+mongo_url = os.environ['MONGO_URL']
+client = AsyncIOMotorClient(
+    mongo_url,
+    tls=True,
+    tlsAllowInvalidCertificates=True,
+    serverSelectionTimeoutMS=30000
+)
+db = client[os.environ['DB_NAME']]
+
+app = FastAPI(title="Elles Market API")
+
+# ✅ CORS EN PREMIER — avant toutes les routes
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "https://elles-market.acodaf.org",
+        "http://localhost:3000",
+        "http://localhost:5173",
+        "http://127.0.0.1:3000",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+api = APIRouter(prefix="/api")
+
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
 # ============ Setup ============
 mongo_url = os.environ['MONGO_URL']
@@ -898,12 +912,13 @@ async def on_shutdown():
 # Mount router
 app.include_router(api)
 
-_frontend_url = os.environ.get("FRONTEND_URL", "http://localhost:3000")
+_frontend_url = os.environ.get("FRONTEND_URL", "https://elles-market.acodaf.org")
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
     allow_origins=[
         _frontend_url,
+        "https://elles-market.acodaf.org",
         "http://localhost:3000",
         "http://localhost:3001",
         "http://127.0.0.1:3000",
