@@ -7,6 +7,17 @@ load_dotenv(ROOT_DIR / '.env')
 import os
 import logging
 import uuid
+from fastapi import FastAPI
+from starlette.middleware.cors import CORSMiddleware
+
+app = FastAPI()
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 from datetime import datetime, timezone
 from typing import Optional, List
 
@@ -29,10 +40,10 @@ from models import (
 
 # ============ Setup ============
 mongo_url = os.environ['MONGO_URL']
-import certifi
 client = AsyncIOMotorClient(
     mongo_url,
-    tlsCAFile=certifi.where(),
+    tls=True,
+    tlsAllowInvalidCertificates=True,
     serverSelectionTimeoutMS=30000
 )
 db = client[os.environ['DB_NAME']]
