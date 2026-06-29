@@ -1,0 +1,6 @@
+[deploy]
+healthcheckPath = "/api/"
+healthcheckTimeout = 30
+
+[networking]
+allowedOrigins = ["https://elles-market.acodaf.org"]
