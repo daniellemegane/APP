@@ -11,13 +11,19 @@ from fastapi import FastAPI
 from starlette.middleware.cors import CORSMiddleware
 
 app = FastAPI()
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "https://elles-market.acodaf.org",
+        "http://localhost:3000",  # pour le dev local
+        "http://localhost:5173",  # si tu utilises Vite
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 from datetime import datetime, timezone
 from typing import Optional, List
 
