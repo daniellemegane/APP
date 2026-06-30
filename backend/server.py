@@ -131,8 +131,111 @@ def role_required(*roles):
 
 
 # ============ AUTH ROUTES ============
+from email_service import generate_otp, send_otp_email
+from datetime import timedelta
+
 @api.post("/auth/register")
 async def register(payload: RegisterRequest, response: Response):
+    email = payload.email.lower()
+    if payload.role not in ("customer", "vendor"):
+        raise HTTPException(status_code=400, detail="Rôle invalide")
+    existing = await db.users.find_one({"email": email})
+    if existing and existing.get("is_verified", False):
+        raise HTTPException(status_code=400, detail="Cet email est déjà utilisé")
+    
+    user_id = new_id()
+    user = {
+        "id": user_id,
+        "email": email,
+        "password_hash": hash_password(payload.password),
+        "full_name": payload.full_name,
+        "role": payload.role,
+        "phone": payload.phone,
+        "city": payload.city,
+        "subscription_plan": "free",
+        "is_active": False,
+        "is_verified": False,
+        "created_at": now_iso(),
+    }
+    if existing:
+        await db.users.replace_one({"email": email}, user)
+    else:
+        await db.users.insert_one(user)
+
+    otp = generate_otp()
+    expires_at = datetime.now(timezone.utc) + timedelta(minutes=10)
+    await db.otps.delete_many({"email": email})
+    await db.otps.insert_one({
+        "email": email,
+        "otp": otp,
+        "expires_at": expires_at,
+        "attempts": 0,
+    })
+
+    try:
+        await send_otp_email(email, otp, payload.full_name)
+    except Exception as e:
+        logger.error(f"Email OTP failed: {e}")
+        raise HTTPException(status_code=500, detail="Erreur envoi email. Vérifiez votre adresse.")
+
+    return {"message": "Code envoyé par email", "email": email, "requires_verification": True}
+
+
+@api.post("/auth/verify-otp")
+async def verify_otp(email: str, otp: str, response: Response):
+    email = email.lower()
+    record = await db.otps.find_one({"email": email})
+    
+    if not record:
+        raise HTTPException(status_code=400, detail="Code invalide ou expiré")
+    
+    if record.get("attempts", 0) >= 5:
+        raise HTTPException(status_code=400, detail="Trop de tentatives. Demandez un nouveau code.")
+    
+    if datetime.now(timezone.utc) > record["expires_at"]:
+        await db.otps.delete_one({"email": email})
+        raise HTTPException(status_code=400, detail="Code expiré. Inscrivez-vous à nouveau.")
+    
+    if record["otp"] != otp:
+        await db.otps.update_one({"email": email}, {"$inc": {"attempts": 1}})
+        remaining = 4 - record.get("attempts", 0)
+        raise HTTPException(status_code=400, detail=f"Code incorrect. {remaining} tentatives restantes.")
+    
+    await db.users.update_one(
+        {"email": email},
+        {"$set": {"is_active": True, "is_verified": True}}
+    )
+    await db.otps.delete_one({"email": email})
+    
+    user = await db.users.find_one({"email": email})
+    access = create_access_token(user["id"], email, user["role"])
+    refresh = create_refresh_token(user["id"])
+    set_auth_cookies(response, access, refresh)
+    user.pop("password_hash", None)
+    user.pop("_id", None)
+    
+    return {"user": user, "access_token": access, "message": "Compte vérifié avec succès !"}
+
+
+@api.post("/auth/resend-otp")
+async def resend_otp(email: str):
+    email = email.lower()
+    user = await db.users.find_one({"email": email, "is_verified": False})
+    if not user:
+        raise HTTPException(status_code=400, detail="Utilisateur introuvable ou déjà vérifié")
+    
+    otp = generate_otp()
+    expires_at = datetime.now(timezone.utc) + timedelta(minutes=10)
+    await db.otps.delete_many({"email": email})
+    await db.otps.insert_one({
+        "email": email,
+        "otp": otp,
+        "expires_at": expires_at,
+        "attempts": 0,
+    })
+    
+    await send_otp_email(email, otp, user["full_name"])
+    return {"message": "Nouveau code envoyé"}
     email = payload.email.lower()
     if payload.role not in ("customer", "vendor"):
         raise HTTPException(status_code=400, detail="Rôle invalide")
