@@ -163,6 +163,80 @@ async def register(payload: RegisterRequest, response: Response):
         raise HTTPException(status_code=500, detail="Erreur envoi email. Vérifiez votre adresse.")
 
     return {"message": "Code envoyé par email", "email": email, "requires_verification": True}
+# ============ MOT DE PASSE ============
+@api.post("/auth/forgot-password")
+async def forgot_password(email: str):
+    email = email.lower()
+    user = await db.users.find_one({"email": email})
+    if not user:
+        # On ne révèle pas si l'email existe ou non (sécurité)
+        return {"message": "Si cet email existe, un code a été envoyé."}
+    
+    otp = generate_otp()
+    expires_at = datetime.now(timezone.utc) + timedelta(minutes=15)
+    await db.password_resets.delete_many({"email": email})
+    await db.password_resets.insert_one({
+        "email": email,
+        "otp": otp,
+        "expires_at": expires_at,
+        "attempts": 0,
+    })
+    
+    try:
+        await send_reset_email(email, otp, user["full_name"])
+    except Exception as e:
+        logger.error(f"Reset email failed: {e}")
+        raise HTTPException(status_code=500, detail="Erreur envoi email.")
+    
+    return {"message": "Si cet email existe, un code a été envoyé."}
+
+
+@api.post("/auth/reset-password")
+async def reset_password(email: str, otp: str, new_password: str):
+    email = email.lower()
+    if len(new_password) < 6:
+        raise HTTPException(status_code=400, detail="Mot de passe trop court (min 6 caractères)")
+    
+    record = await db.password_resets.find_one({"email": email})
+    if not record:
+        raise HTTPException(status_code=400, detail="Code invalide ou expiré")
+    
+    if record.get("attempts", 0) >= 5:
+        raise HTTPException(status_code=400, detail="Trop de tentatives.")
+    
+    expires_at = record["expires_at"]
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+    if datetime.now(timezone.utc) > expires_at:
+        await db.password_resets.delete_one({"email": email})
+        raise HTTPException(status_code=400, detail="Code expiré. Recommencez.")
+    
+    if record["otp"] != otp:
+        await db.password_resets.update_one({"email": email}, {"$inc": {"attempts": 1}})
+        remaining = 4 - record.get("attempts", 0)
+        raise HTTPException(status_code=400, detail=f"Code incorrect. {remaining} tentatives restantes.")
+    
+    await db.users.update_one(
+        {"email": email},
+        {"$set": {"password_hash": hash_password(new_password)}}
+    )
+    await db.password_resets.delete_one({"email": email})
+    return {"message": "Mot de passe réinitialisé avec succès !"}
+
+
+# ============ SUPPRESSION DE COMPTE ============
+@api.delete("/auth/me")
+async def delete_my_account(user: dict = Depends(current_user)):
+    await db.users.delete_one({"id": user["id"]})
+    await db.shops.delete_many({"vendor_id": user["id"]})
+    await db.products.delete_many({"vendor_id": user["id"]})
+    await db.orders.update_many(
+        {"vendor_id": user["id"]},
+        {"$set": {"status": "cancelled"}}
+    )
+    await db.otps.delete_many({"email": user["email"]})
+    await db.password_resets.delete_many({"email": user["email"]})
+    return {"ok": True, "message": "Compte supprimé avec succès."}
 
 
 @api.post("/auth/verify-otp")
