@@ -176,7 +176,10 @@ async def verify_otp(email: str, otp: str, response: Response):
     if record.get("attempts", 0) >= 5:
         raise HTTPException(status_code=400, detail="Trop de tentatives. Demandez un nouveau code.")
 
-    if datetime.now(timezone.utc) > record["expires_at"]:
+    expires_at = record["expires_at"]
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+    if datetime.now(timezone.utc) > expires_at:
         await db.otps.delete_one({"email": email})
         raise HTTPException(status_code=400, detail="Code expiré. Inscrivez-vous à nouveau.")
 
@@ -199,7 +202,6 @@ async def verify_otp(email: str, otp: str, response: Response):
     user.pop("_id", None)
 
     return {"user": user, "access_token": access, "message": "Compte vérifié avec succès !"}
-
 
 @api.post("/auth/resend-otp")
 async def resend_otp(email: str):
