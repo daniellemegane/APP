@@ -7,13 +7,14 @@ load_dotenv(ROOT_DIR / '.env')
 import os
 import logging
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Optional, List
 
 from fastapi import FastAPI, APIRouter, Request, Response, HTTPException, Depends, UploadFile, File, Query, Header
 from fastapi.responses import StreamingResponse
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
+from pydantic import BaseModel as PydanticModel
 
 from auth import (
     hash_password, verify_password, create_access_token, create_refresh_token,
@@ -26,6 +27,8 @@ from models import (
     ProductCreate, ProductUpdate, CheckoutRequest, OrderStatusUpdate,
     ReviewCreate, BannerCreate, SubscriptionUpgrade, now_iso, new_id,
 )
+from email_service import generate_otp, send_otp_email
+from mtn_momo import create_api_user, get_access_token, request_payment, get_payment_status
 
 # ============ Setup ============
 mongo_url = os.environ['MONGO_URL']
@@ -39,36 +42,24 @@ db = client[os.environ['DB_NAME']]
 
 app = FastAPI(title="Elles Market API")
 
-# ✅ CORS EN PREMIER — avant toutes les routes
+# CORS en premier — avant toutes les routes
+_frontend_url = os.environ.get("FRONTEND_URL", "https://elles-market.acodaf.org")
 app.add_middleware(
     CORSMiddleware,
+    allow_credentials=True,
     allow_origins=[
+        _frontend_url,
         "https://elles-market.acodaf.org",
         "http://localhost:3000",
+        "http://localhost:3001",
         "http://localhost:5173",
         "http://127.0.0.1:3000",
+        "http://127.0.0.1:8000",
     ],
-    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-api = APIRouter(prefix="/api")
-
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-logger = logging.getLogger(__name__)
-
-# ============ Setup ============
-mongo_url = os.environ['MONGO_URL']
-client = AsyncIOMotorClient(
-    mongo_url,
-    tls=True,
-    tlsAllowInvalidCertificates=True,
-    serverSelectionTimeoutMS=30000
-)
-db = client[os.environ['DB_NAME']]
-
-app = FastAPI(title="Elles Market API")
 api = APIRouter(prefix="/api")
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -109,17 +100,13 @@ def compute_commission(amount: float, plan: str) -> float:
     return round(amount * rate, 2)
 
 
+def formatPrice_py(amount: float) -> str:
+    return f"{int(amount):,}".replace(",", " ")
+
+
 # ============ Auth Dependency ============
 async def current_user(request: Request) -> dict:
     return await get_current_user(request, db)
-
-
-async def require_roles(roles: List[str]):
-    async def _check(user: dict = Depends(current_user)) -> dict:
-        if user.get("role") not in roles:
-            raise HTTPException(status_code=403, detail="Permissions insuffisantes")
-        return user
-    return _check
 
 
 def role_required(*roles):
@@ -130,10 +117,7 @@ def role_required(*roles):
     return _check
 
 
-# ============ AUTH ROUTES ============
-from email_service import generate_otp, send_otp_email
-from datetime import timedelta
-
+# ============ AUTH ROUTES (avec vérification OTP par email) ============
 @api.post("/auth/register")
 async def register(payload: RegisterRequest, response: Response):
     email = payload.email.lower()
@@ -142,7 +126,7 @@ async def register(payload: RegisterRequest, response: Response):
     existing = await db.users.find_one({"email": email})
     if existing and existing.get("is_verified", False):
         raise HTTPException(status_code=400, detail="Cet email est déjà utilisé")
-    
+
     user_id = new_id()
     user = {
         "id": user_id,
@@ -185,35 +169,35 @@ async def register(payload: RegisterRequest, response: Response):
 async def verify_otp(email: str, otp: str, response: Response):
     email = email.lower()
     record = await db.otps.find_one({"email": email})
-    
+
     if not record:
         raise HTTPException(status_code=400, detail="Code invalide ou expiré")
-    
+
     if record.get("attempts", 0) >= 5:
         raise HTTPException(status_code=400, detail="Trop de tentatives. Demandez un nouveau code.")
-    
+
     if datetime.now(timezone.utc) > record["expires_at"]:
         await db.otps.delete_one({"email": email})
         raise HTTPException(status_code=400, detail="Code expiré. Inscrivez-vous à nouveau.")
-    
+
     if record["otp"] != otp:
         await db.otps.update_one({"email": email}, {"$inc": {"attempts": 1}})
         remaining = 4 - record.get("attempts", 0)
         raise HTTPException(status_code=400, detail=f"Code incorrect. {remaining} tentatives restantes.")
-    
+
     await db.users.update_one(
         {"email": email},
         {"$set": {"is_active": True, "is_verified": True}}
     )
     await db.otps.delete_one({"email": email})
-    
+
     user = await db.users.find_one({"email": email})
     access = create_access_token(user["id"], email, user["role"])
     refresh = create_refresh_token(user["id"])
     set_auth_cookies(response, access, refresh)
     user.pop("password_hash", None)
     user.pop("_id", None)
-    
+
     return {"user": user, "access_token": access, "message": "Compte vérifié avec succès !"}
 
 
@@ -223,7 +207,7 @@ async def resend_otp(email: str):
     user = await db.users.find_one({"email": email, "is_verified": False})
     if not user:
         raise HTTPException(status_code=400, detail="Utilisateur introuvable ou déjà vérifié")
-    
+
     otp = generate_otp()
     expires_at = datetime.now(timezone.utc) + timedelta(minutes=10)
     await db.otps.delete_many({"email": email})
@@ -233,35 +217,9 @@ async def resend_otp(email: str):
         "expires_at": expires_at,
         "attempts": 0,
     })
-    
+
     await send_otp_email(email, otp, user["full_name"])
     return {"message": "Nouveau code envoyé"}
-    email = payload.email.lower()
-    if payload.role not in ("customer", "vendor"):
-        raise HTTPException(status_code=400, detail="Rôle invalide")
-    existing = await db.users.find_one({"email": email})
-    if existing:
-        raise HTTPException(status_code=400, detail="Cet email est déjà utilisé")
-    user_id = new_id()
-    user = {
-        "id": user_id,
-        "email": email,
-        "password_hash": hash_password(payload.password),
-        "full_name": payload.full_name,
-        "role": payload.role,
-        "phone": payload.phone,
-        "city": payload.city,
-        "subscription_plan": "free",
-        "is_active": True,
-        "created_at": now_iso(),
-    }
-    await db.users.insert_one(user)
-    access = create_access_token(user_id, email, payload.role)
-    refresh = create_refresh_token(user_id)
-    set_auth_cookies(response, access, refresh)
-    user.pop("password_hash", None)
-    user.pop("_id", None)
-    return {"user": user, "access_token": access}
 
 
 @api.post("/auth/login")
@@ -271,7 +229,7 @@ async def login(payload: LoginRequest, response: Response):
     if not user or not verify_password(payload.password, user["password_hash"]):
         raise HTTPException(status_code=401, detail="Email ou mot de passe incorrect")
     if not user.get("is_active", True):
-        raise HTTPException(status_code=403, detail="Compte désactivé")
+        raise HTTPException(status_code=403, detail="Compte désactivé. Vérifiez votre email.")
     access = create_access_token(user["id"], email, user["role"])
     refresh = create_refresh_token(user["id"])
     set_auth_cookies(response, access, refresh)
@@ -317,7 +275,7 @@ async def create_shop(payload: ShopCreate, user: dict = Depends(role_required("v
         "logo_url": payload.logo_url,
         "cover_url": payload.cover_url,
         "whatsapp": payload.whatsapp,
-        "status": "pending",  # pending | approved | rejected
+        "status": "pending",
         "is_premium": user.get("subscription_plan") == "premium",
         "rating_avg": 0.0,
         "created_at": now_iso(),
@@ -564,8 +522,7 @@ async def checkout(payload: CheckoutRequest, user: dict = Depends(role_required(
     if not payload.items:
         raise HTTPException(status_code=400, detail="Panier vide")
 
-    # Group by shop and validate stock
-    shop_groups: dict[str, list] = {}
+    shop_groups: dict = {}
     for item in payload.items:
         prod = await db.products.find_one({"id": item.product_id})
         if not prod or not prod.get("is_active", True):
@@ -596,7 +553,6 @@ async def checkout(payload: CheckoutRequest, user: dict = Depends(role_required(
             })
         commission = compute_commission(subtotal, plan)
         vendor_payout = subtotal - commission
-        # Simulated shipping fee (only for physical)
         has_physical = any(p["type"] == "physical" for p, _ in items)
         shipping_fee = 1500.0 if has_physical else 0.0
         total = subtotal + shipping_fee
@@ -616,7 +572,7 @@ async def checkout(payload: CheckoutRequest, user: dict = Depends(role_required(
             "vendor_plan": plan,
             "status": "pending",
             "payment_method": payload.payment_method,
-            "payment_status": "paid",  # simulated
+            "payment_status": "paid",
             "shipping_address": payload.shipping_address,
             "shipping_city": payload.shipping_city,
             "shipping_phone": payload.shipping_phone,
@@ -627,7 +583,6 @@ async def checkout(payload: CheckoutRequest, user: dict = Depends(role_required(
         }
         created_orders.append(order)
 
-    # Insert and decrement stock
     for o in created_orders:
         await db.orders.insert_one(o)
         for it in o["items"]:
@@ -683,15 +638,13 @@ async def update_order_status(order_id: str, payload: OrderStatusUpdate, user: d
 # ============ REVIEWS ============
 @api.post("/reviews")
 async def create_review(payload: ReviewCreate, user: dict = Depends(role_required("customer"))):
-    # Must have ordered & received the product
     delivered = await db.orders.find_one({
         "customer_id": user["id"],
         "status": "delivered",
         "items.product_id": payload.product_id,
     })
     if not delivered:
-        raise HTTPException(status_code=400, detail="Vous pouvez avis uniquement après livraison")
-    # one review per product per user
+        raise HTTPException(status_code=400, detail="Vous pouvez laisser un avis uniquement après livraison")
     existing = await db.reviews.find_one({"customer_id": user["id"], "product_id": payload.product_id})
     if existing:
         raise HTTPException(status_code=400, detail="Vous avez déjà laissé un avis")
@@ -705,7 +658,6 @@ async def create_review(payload: ReviewCreate, user: dict = Depends(role_require
         "created_at": now_iso(),
     }
     await db.reviews.insert_one(review)
-    # Update product rating
     cursor = db.reviews.find({"product_id": payload.product_id})
     ratings = [r["rating"] async for r in cursor]
     avg = round(sum(ratings) / len(ratings), 2) if ratings else 0.0
@@ -728,7 +680,6 @@ async def list_reviews(product_id: str):
 async def upgrade_sub(payload: SubscriptionUpgrade, user: dict = Depends(role_required("vendor"))):
     if payload.plan not in ("free", "premium"):
         raise HTTPException(status_code=400, detail="Plan invalide")
-    # simulated payment
     await db.users.update_one({"id": user["id"]}, {"$set": {"subscription_plan": payload.plan}})
     await db.shops.update_one({"vendor_id": user["id"]}, {"$set": {"is_premium": payload.plan == "premium"}})
     await db.subscription_payments.insert_one({
@@ -783,7 +734,6 @@ async def admin_stats(user: dict = Depends(role_required("admin"))):
     shops_approved = await db.shops.count_documents({"status": "approved"})
     products = await db.products.count_documents({})
     orders = await db.orders.count_documents({})
-    # revenue aggregation
     pipeline = [{"$group": {"_id": None, "total_gmv": {"$sum": "$total"}, "total_commission": {"$sum": "$commission"}}}]
     agg = await db.orders.aggregate(pipeline).to_list(1)
     gmv = agg[0]["total_gmv"] if agg else 0
@@ -831,15 +781,13 @@ async def vendor_stats(user: dict = Depends(role_required("vendor"))):
         "by_status": agg,
     }
 
+
 # ============ PAIEMENT MTN MOMO ============
-from mtn_momo import create_api_user, get_access_token, request_payment, get_payment_status
-
-from pydantic import BaseModel as PydanticModel
-
 class MoMoPaymentRequest(PydanticModel):
     phone_number: str
     amount: float
     order_id: str
+
 
 @api.post("/payments/mtn/initiate")
 async def initiate_mtn_payment(payload: MoMoPaymentRequest, user: dict = Depends(current_user)):
@@ -873,6 +821,7 @@ async def initiate_mtn_payment(payload: MoMoPaymentRequest, user: dict = Depends
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erreur paiement MTN: {str(e)}")
 
+
 @api.get("/payments/mtn/status/{reference_id}")
 async def check_mtn_payment(reference_id: str, user: dict = Depends(current_user)):
     payment = await db.payments.find_one({"reference_id": reference_id}, {"_id": 0})
@@ -901,12 +850,11 @@ async def check_mtn_payment(reference_id: str, user: dict = Depends(current_user
 
 
 # ============ RETRAITS ============
-from pydantic import BaseModel as PydanticModel
-
 class RetraitRequest(PydanticModel):
     montant: float
     numero_mobile_money: str
     operateur: str  # mtn | orange
+
 
 @api.post("/retraits")
 async def demander_retrait(payload: RetraitRequest, user: dict = Depends(role_required("vendor"))):
@@ -942,22 +890,25 @@ async def demander_retrait(payload: RetraitRequest, user: dict = Depends(role_re
     retrait.pop("_id", None)
     return {"message": "Demande de retrait envoyée !", "retrait": retrait}
 
-def formatPrice_py(amount: float) -> str:
-    return f"{int(amount):,}".replace(",", " ")
+
 @api.get("/retraits/mine")
 async def mes_retraits(user: dict = Depends(role_required("vendor"))):
     retraits = await db.retraits.find({"vendor_id": user["id"]}, {"_id": 0}).sort([("created_at", -1)]).to_list(100)
     return retraits
+
 
 @api.get("/admin/retraits")
 async def admin_retraits(user: dict = Depends(role_required("admin"))):
     retraits = await db.retraits.find({}, {"_id": 0}).sort([("created_at", -1)]).to_list(500)
     return retraits
 
+
 @api.patch("/admin/retraits/{retrait_id}")
 async def maj_retrait(retrait_id: str, status: str, user: dict = Depends(role_required("admin"))):
     await db.retraits.update_one({"id": retrait_id}, {"$set": {"status": status}})
     return {"ok": True}
+
+
 # ============ Health ============
 @api.get("/")
 async def root():
@@ -979,7 +930,6 @@ async def on_startup():
     await db.orders.create_index("vendor_id")
     await db.reviews.create_index([("product_id", 1), ("customer_id", 1)], unique=True)
 
-    # Seed admin
     admin_email = os.environ.get("ADMIN_EMAIL", "admin@ellesmarket.cm")
     admin_password = os.environ.get("ADMIN_PASSWORD", "Admin123!")
     existing = await db.users.find_one({"email": admin_email})
@@ -991,6 +941,7 @@ async def on_startup():
             "full_name": "Administrateur",
             "role": "admin",
             "is_active": True,
+            "is_verified": True,
             "subscription_plan": "premium",
             "created_at": now_iso(),
         })
@@ -999,7 +950,6 @@ async def on_startup():
         if not verify_password(admin_password, existing["password_hash"]):
             await db.users.update_one({"email": admin_email}, {"$set": {"password_hash": hash_password(admin_password)}})
 
-    # init storage
     try:
         init_storage()
         logger.info("Object storage initialized")
@@ -1014,20 +964,3 @@ async def on_shutdown():
 
 # Mount router
 app.include_router(api)
-
-_frontend_url = os.environ.get("FRONTEND_URL", "https://elles-market.acodaf.org")
-app.add_middleware(
-    CORSMiddleware,
-    allow_credentials=True,
-    allow_origins=[
-        _frontend_url,
-        "https://elles-market.acodaf.org",
-        "http://localhost:3000",
-        "http://localhost:3001",
-        "http://127.0.0.1:3000",
-        "http://127.0.0.1:8000",
-    ],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
