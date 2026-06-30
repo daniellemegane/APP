@@ -1,12 +1,9 @@
 import random
 import string
-import aiosmtplib
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
 import os
+import resend
 
-GMAIL_USER = os.environ.get("GMAIL_USER")
-GMAIL_PASSWORD = os.environ.get("GMAIL_PASSWORD")
+resend.api_key = os.environ.get("RESEND_API_KEY")
 
 def generate_otp() -> str:
     return ''.join(random.choices(string.digits, k=6))
@@ -35,18 +32,9 @@ async def send_otp_email(to_email: str, otp: str, full_name: str):
         </div>
     </div>
     """
-    message = MIMEMultipart("alternative")
-    message["Subject"] = f"🔐 Votre code de vérification Elles Market : {otp}"
-    message["From"] = f"Elles Market <{GMAIL_USER}>"
-    message["To"] = to_email
-    message.attach(MIMEText(html, "html"))
-
-    await aiosmtplib.send(
-        message,
-        hostname="smtp.gmail.com",
-        port=465,
-        use_tls=True,
-        username=GMAIL_USER,
-        password=GMAIL_PASSWORD,
-        timeout=15,
-    )
+    resend.Emails.send({
+        "from": "Elles Market <onboarding@resend.dev>",
+        "to": [to_email],
+        "subject": f"Votre code de vérification Elles Market : {otp}",
+        "html": html,
+    })
