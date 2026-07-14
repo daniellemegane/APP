@@ -5,7 +5,7 @@ import resend
 
 resend.api_key = os.environ.get("RESEND_API_KEY")
 
-SENDER = "Elles Market <noreply@politique-commerciale.com>"
+SENDER = "Elles Market <noreply@trade-policy.com>"
 
 def generate_otp() -> str:
     return ''.join(random.choices(string.digits, k=6))
