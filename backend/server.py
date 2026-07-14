@@ -27,7 +27,7 @@ from models import (
     ProductCreate, ProductUpdate, CheckoutRequest, OrderStatusUpdate,
     ReviewCreate, BannerCreate, SubscriptionUpgrade, now_iso, new_id,
 )
-from email_service import generate_otp, send_otp_email
+from email_service import generate_otp, send_otp_email, send_reset_email
 from mtn_momo import create_api_user, get_access_token, request_payment, get_payment_status
 
 # ============ Setup ============
