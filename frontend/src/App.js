@@ -3,8 +3,8 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { CartProvider } from "@/contexts/CartContext";
 import { Toaster } from "@/components/ui/sonner";
-import {ForgotPassword} from "@/pages/ForgotPassword";
-import { DeleteAccount} from "@/pages/DeleteAccount";
+import ForgotPassword from "@/pages/ForgotPassword";
+import { DeleteAccount } from "@/pages/DeleteAccount";
 
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
@@ -66,6 +66,8 @@ function App() {
             <Route path="/boutiques" element={<Shell><Shops /></Shell>} />
             <Route path="/boutique/:id" element={<Shell><ShopDetail /></Shell>} />
             <Route path="/connexion" element={<Shell><Login /></Shell>} />
+            <Route path="/mot-de-passe-oublie" element={<Shell><ForgotPassword /></Shell>} />
+            <Route path="/supprimer-mon-compte" element={<Shell><ProtectedRoute roles={["customer", "vendor"]}><DeleteAccount /></ProtectedRoute></Shell>} />
             <Route path="/inscription" element={<Shell><Register /></Shell>} />
             <Route path="/panier" element={<Shell><Cart /></Shell>} />
             <Route path="/checkout" element={<Shell><ProtectedRoute roles={["customer"]}><Checkout /></ProtectedRoute></Shell>} />
