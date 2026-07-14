@@ -11,7 +11,7 @@ import { toast } from "sonner";
 
 const Register = () => {
   const navigate = useNavigate();
-  const { register, login } = useAuth();
+  const { register, verifyOtp } = useAuth();
   const [form, setForm] = useState({
     full_name: "",
     email: "",
@@ -35,21 +35,21 @@ const Register = () => {
     api.get("/meta/cities").then((r) => setCities(r.data));
   }, []);
 
-  // Countdown pour renvoyer OTP
   useEffect(() => {
     if (countdown <= 0) return;
     const t = setTimeout(() => setCountdown(countdown - 1), 1000);
     return () => clearTimeout(t);
   }, [countdown]);
 
+  // ============ Soumission inscription ============
   const submit = async (e) => {
     e.preventDefault();
     setBusy(true);
     setError("");
     try {
-      const res = await api.post("/auth/register", form);
-      if (res.data.requires_verification) {
-        setPendingEmail(res.data.email);
+      const res = await register(form);
+      if (res.requires_verification) {
+        setPendingEmail(res.email);
         setStep("otp");
         setCountdown(60);
         toast.success("Code envoyé sur votre email !");
@@ -58,22 +58,23 @@ const Register = () => {
         navigate(form.role === "vendor" ? "/vendeuse" : "/");
       }
     } catch (e) {
-      setError(e.response?.data?.detail || e.message);
+      setError(e.message);
     } finally {
       setBusy(false);
     }
   };
 
-  const verifyOtp = async (e) => {
+  // ============ Vérification OTP ============
+  const verifyOtpSubmit = async (e) => {
     e.preventDefault();
     setBusy(true);
     setError("");
     try {
-      const res = await api.post(`/auth/verify-otp?email=${encodeURIComponent(pendingEmail)}&otp=${otp}`);
+      const u = await verifyOtp(pendingEmail, otp);
       toast.success("Compte vérifié avec succès ! 🎉");
-      navigate(res.data.user.role === "vendor" ? "/vendeuse" : "/");
+      navigate(u.role === "vendor" ? "/vendeuse" : "/");
     } catch (e) {
-      setError(e.response?.data?.detail || e.message);
+      setError(e.message);
     } finally {
       setBusy(false);
     }
@@ -106,7 +107,7 @@ const Register = () => {
           Un code à 6 chiffres a été envoyé à <strong>{pendingEmail}</strong>. Vérifiez vos spams si nécessaire.
         </p>
 
-        <form onSubmit={verifyOtp} className="mt-8 space-y-5">
+        <form onSubmit={verifyOtpSubmit} className="mt-8 space-y-5">
           <div>
             <Label htmlFor="otp">Code de vérification</Label>
             <Input

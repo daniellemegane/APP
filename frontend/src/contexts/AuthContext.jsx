@@ -34,25 +34,39 @@ export const AuthProvider = ({ children }) => {
   };
 
   const register = async (payload) => {
-    setError("");
-    try {
-      const { data } = await api.post("/auth/register", payload);
+  setError("");
+  try {
+    const { data } = await api.post("/auth/register", payload);
+    if (!data.requires_verification) {
       setUser(data.user);
-      return data.user;
-    } catch (e) {
-      const msg = formatApiError(e);
-      setError(msg);
-      throw new Error(msg);
     }
-  };
+    return data;
+  } catch (e) {
+    const msg = formatApiError(e);
+    setError(msg);
+    throw new Error(msg);
+  }
+};
 
   const logout = async () => {
     try { await api.post("/auth/logout"); } catch {}
     setUser(null);
   };
+  const verifyOtp = async (email, otp) => {
+  setError("");
+  try {
+    const { data } = await api.post(`/auth/verify-otp?email=${encodeURIComponent(email)}&otp=${otp}`);
+    setUser(data.user);
+    return data.user;
+  } catch (e) {
+    const msg = formatApiError(e);
+    setError(msg);
+    throw new Error(msg);
+  }
+};
 
   return (
-    <AuthCtx.Provider value={{ user, login, register, logout, refresh, error, setError }}>
+    <AuthCtx.Provider value={{ user, login, register, verifyOtp, logout, refresh, error, setError }}>
       {children}
     </AuthCtx.Provider>
   );

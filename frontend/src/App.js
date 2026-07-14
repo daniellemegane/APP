@@ -3,6 +3,8 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { CartProvider } from "@/contexts/CartContext";
 import { Toaster } from "@/components/ui/sonner";
+import {ForgotPassword} from "@/pages/ForgotPassword";
+import { DeleteAccount} from "@/pages/DeleteAccount";
 
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
