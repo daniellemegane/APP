@@ -226,7 +226,10 @@ async def reset_password(email: str, otp: str, new_password: str):
 
 # ============ SUPPRESSION DE COMPTE ============
 @api.delete("/auth/me")
-async def delete_my_account(user: dict = Depends(current_user)):
+async def delete_my_account(password: str, user: dict = Depends(current_user)):
+    full_user = await db.users.find_one({"id": user["id"]})
+    if not full_user or not verify_password(password, full_user["password_hash"]):
+        raise HTTPException(status_code=401, detail="Mot de passe incorrect")
     await db.users.delete_one({"id": user["id"]})
     await db.shops.delete_many({"vendor_id": user["id"]})
     await db.products.delete_many({"vendor_id": user["id"]})

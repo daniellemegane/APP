@@ -2,7 +2,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCart } from "@/contexts/CartContext";
 import { Button } from "@/components/ui/button";
-import { ShoppingBag, User, LogOut, Menu, Search, LayoutDashboard } from "lucide-react";
+import { ShoppingBag, User, LogOut, Menu, Search, LayoutDashboard, Trash2 } from "lucide-react";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
@@ -91,6 +91,14 @@ const Header = () => {
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={async () => { await logout(); navigate("/"); }} data-testid="logout-menu-item">
                   <LogOut className="w-4 h-4 mr-2" /> Se déconnecter
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onClick={() => navigate("/supprimer-mon-compte")}
+                  className="text-destructive focus:text-destructive"
+                  data-testid="delete-account-menu-item"
+                >
+                  <Trash2 className="w-4 h-4 mr-2" /> Supprimer mon compte
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
