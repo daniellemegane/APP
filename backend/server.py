@@ -28,6 +28,7 @@ from models import (
     ReviewCreate, BannerCreate, SubscriptionUpgrade, now_iso, new_id,
 )
 from email_service import generate_otp, send_otp_email, send_reset_email
+from infobip_service import send_otp_sms
 from mtn_momo import create_api_user, get_access_token, request_payment, get_payment_status
 
 # ============ Setup ============
@@ -103,6 +104,15 @@ def compute_commission(amount: float, plan: str) -> float:
 def formatPrice_py(amount: float) -> str:
     return f"{int(amount):,}".replace(",", " ")
 
+async def send_otp_via_channel(user: dict, otp: str):
+    channel = user.get("otp_channel", "email")
+    if channel == "sms":
+        if not user.get("phone"):
+            raise HTTPException(status_code=400, detail="Numéro de téléphone manquant pour l'envoi SMS")
+        await send_otp_sms(user["phone"], otp, user["full_name"])
+    else:
+        await send_otp_email(user["email"], otp, user["full_name"])
+
 
 # ============ Auth Dependency ============
 async def current_user(request: Request) -> dict:
@@ -117,7 +127,7 @@ def role_required(*roles):
     return _check
 
 
-# ============ AUTH ROUTES (avec vérification OTP par email) ============
+# ============ AUTH ROUTES (avec vérification OTP par email et sms) ============
 @api.post("/auth/register")
 async def register(payload: RegisterRequest, response: Response):
     email = payload.email.lower()
@@ -136,6 +146,7 @@ async def register(payload: RegisterRequest, response: Response):
         "role": payload.role,
         "phone": payload.phone,
         "city": payload.city,
+        "otp_channel": payload.otp_channel,
         "subscription_plan": "free",
         "is_active": False,
         "is_verified": False,
@@ -157,12 +168,20 @@ async def register(payload: RegisterRequest, response: Response):
     })
 
     try:
-        await send_otp_email(email, otp, payload.full_name)
+        await send_otp_via_channel(user, otp)
     except Exception as e:
-        logger.error(f"Email OTP failed: {e}")
-        raise HTTPException(status_code=500, detail="Erreur envoi email. Vérifiez votre adresse.")
+        logger.error(f"OTP send failed ({user.get('otp_channel')}): {e}")
+        raise HTTPException(status_code=500, detail="Erreur envoi du code. Vérifiez vos coordonnées.")
 
-    return {"message": "Code envoyé par email", "email": email, "requires_verification": True}
+    return {
+        "message": "Code envoyé",
+        "email": email,
+        "channel": user["otp_channel"],
+        "requires_verification": True,
+    }
+
+
+
 # ============ MOT DE PASSE ============
 @api.post("/auth/forgot-password")
 async def forgot_password(email: str):
@@ -297,8 +316,9 @@ async def resend_otp(email: str):
         "attempts": 0,
     })
 
-    await send_otp_email(email, otp, user["full_name"])
-    return {"message": "Nouveau code envoyé"}
+    await send_otp_via_channel(user, otp)
+    return {"message": "Nouveau code envoyé", "channel": user.get("otp_channel", "email")}
+
 
 
 @api.post("/auth/login")

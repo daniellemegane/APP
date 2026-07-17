@@ -1,8 +1,9 @@
 """Pydantic models for the marketplace."""
-from pydantic import BaseModel, Field, EmailStr, ConfigDict
+from pydantic import BaseModel, Field, EmailStr, ConfigDict, field_validator
 from typing import Optional, List
 from datetime import datetime, timezone
 import uuid
+import re
 
 
 def now_iso() -> str:
@@ -19,9 +20,24 @@ class RegisterRequest(BaseModel):
     password: str = Field(min_length=6)
     full_name: str = Field(min_length=2)
     role: str = Field(default="customer")  # customer | vendor
-    phone: Optional[str] = None
+    phone: str = Field(min_length=8)
     city: Optional[str] = None
+    otp_channel: str = Field(default="email")  # email | sms | whatsapp
 
+    @field_validator("phone")
+    @classmethod
+    def validate_phone(cls, v):
+        cleaned = re.sub(r"[^\d+]", "", v)
+        if not re.match(r"^\+?237?\d{9}$", cleaned) and not re.match(r"^\+?\d{9,15}$", cleaned):
+            raise ValueError("Numéro de téléphone invalide")
+        return cleaned
+
+    @field_validator("otp_channel")
+    @classmethod
+    def validate_channel(cls, v):
+        if v not in ("email", "sms", "whatsapp"):
+            raise ValueError("Canal invalide")
+        return v
 
 class LoginRequest(BaseModel):
     email: EmailStr

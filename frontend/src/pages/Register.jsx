@@ -19,6 +19,7 @@ const Register = () => {
     role: "customer",
     phone: "",
     city: "",
+    otp_channel: "email",
   });
   const [cities, setCities] = useState([]);
   const [busy, setBusy] = useState(false);
@@ -28,6 +29,7 @@ const Register = () => {
   const [step, setStep] = useState("register"); // "register" | "otp"
   const [otp, setOtp] = useState("");
   const [pendingEmail, setPendingEmail] = useState("");
+  const [otpChannelUsed, setOtpChannelUsed] = useState("email");
   const [resendBusy, setResendBusy] = useState(false);
   const [countdown, setCountdown] = useState(0);
 
@@ -50,9 +52,12 @@ const Register = () => {
       const res = await register(form);
       if (res.requires_verification) {
         setPendingEmail(res.email);
+        setOtpChannelUsed(res.channel || "email");
         setStep("otp");
         setCountdown(60);
-        toast.success("Code envoyé sur votre email !");
+        toast.success(
+          res.channel === "sms" ? "Code envoyé par SMS !" : "Code envoyé sur votre email !"
+        );
       } else {
         toast.success("Compte créé avec succès !");
         navigate(form.role === "vendor" ? "/vendeuse" : "/");
@@ -83,8 +88,8 @@ const Register = () => {
   const resendOtp = async () => {
     setResendBusy(true);
     try {
-      await api.post(`/auth/resend-otp?email=${encodeURIComponent(pendingEmail)}`);
-      toast.success("Nouveau code envoyé !");
+      const { data } = await api.post(`/auth/resend-otp?email=${encodeURIComponent(pendingEmail)}`);
+      toast.success(data.channel === "sms" ? "Nouveau code envoyé par SMS !" : "Nouveau code envoyé !");
       setCountdown(60);
     } catch (e) {
       toast.error(e.response?.data?.detail || "Erreur envoi");
@@ -101,10 +106,14 @@ const Register = () => {
       <div className="max-w-md mx-auto px-6 py-16 lg:py-20 fade-in">
         <div className="text-xs uppercase tracking-[0.3em] text-primary mb-2">Vérification</div>
         <h1 className="font-display font-bold text-3xl sm:text-4xl tracking-tight">
-          Confirmez votre <span className="font-serif italic font-light">email</span>.
+          Confirmez votre <span className="font-serif italic font-light">compte</span>.
         </h1>
         <p className="mt-4 text-muted-foreground">
-          Un code à 6 chiffres a été envoyé à <strong>{pendingEmail}</strong>. Vérifiez vos spams si nécessaire.
+          {otpChannelUsed === "sms" ? (
+            <>Un code à 6 chiffres a été envoyé par SMS au numéro renseigné.</>
+          ) : (
+            <>Un code à 6 chiffres a été envoyé à <strong>{pendingEmail}</strong>. Vérifiez vos spams si nécessaire.</>
+          )}
         </p>
 
         <form onSubmit={verifyOtpSubmit} className="mt-8 space-y-5">
@@ -148,7 +157,7 @@ const Register = () => {
             onClick={() => setStep("register")}
             className="w-full text-sm text-center text-muted-foreground hover:underline"
           >
-            ← Modifier mon email
+            ← Modifier mes informations
           </button>
         </form>
       </div>
@@ -198,8 +207,17 @@ const Register = () => {
           <div className="text-xs text-muted-foreground mt-1">Minimum 6 caractères.</div>
         </div>
         <div>
-          <Label htmlFor="phone">Téléphone (facultatif)</Label>
-          <Input id="phone" value={form.phone} onChange={(e) => set("phone", e.target.value)} placeholder="+237 6…" />
+          <Label htmlFor="phone">Téléphone</Label>
+          <Input
+            id="phone"
+            required
+            value={form.phone}
+            onChange={(e) => set("phone", e.target.value)}
+            placeholder="+237 6XX XXX XXX"
+          />
+          <div className="text-xs text-muted-foreground mt-1">
+            Obligatoire — utilisé pour la vérification par SMS si vous le choisissez ci-dessous.
+          </div>
         </div>
         <div>
           <Label>Ville</Label>
@@ -209,6 +227,20 @@ const Register = () => {
               {cities.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
             </SelectContent>
           </Select>
+        </div>
+
+        <div>
+          <Label>Recevoir mon code de vérification par…</Label>
+          <RadioGroup value={form.otp_channel} onValueChange={(v) => set("otp_channel", v)} className="grid grid-cols-2 gap-3 mt-2">
+            <label className={`p-4 border-2 rounded-sm cursor-pointer flex items-center gap-3 ${form.otp_channel === "email" ? "border-primary bg-primary/5" : "border-border"}`}>
+              <RadioGroupItem value="email" id="channel-email" />
+              <div className="font-medium">Email</div>
+            </label>
+            <label className={`p-4 border-2 rounded-sm cursor-pointer flex items-center gap-3 ${form.otp_channel === "sms" ? "border-primary bg-primary/5" : "border-border"}`}>
+              <RadioGroupItem value="sms" id="channel-sms" />
+              <div className="font-medium">SMS</div>
+            </label>
+          </RadioGroup>
         </div>
 
         {error && <div className="text-sm text-destructive">{error}</div>}
