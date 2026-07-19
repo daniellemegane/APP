@@ -108,9 +108,10 @@ const Register = () => {
         <h1 className="font-display font-bold text-3xl sm:text-4xl tracking-tight">
           Confirmez votre <span className="font-serif italic font-light">compte</span>.
         </h1>
-        <p className="mt-4 text-muted-foreground">
+        
+       <p className="mt-4 text-muted-foreground">
           {otpChannelUsed === "sms" ? (
-            <>Un code à 6 chiffres a été envoyé par SMS au numéro renseigné.</>
+            <>Un code à 6 chiffres a été envoyé au numéro <strong>{form.phone}</strong>.</>
           ) : (
             <>Un code à 6 chiffres a été envoyé à <strong>{pendingEmail}</strong>. Vérifiez vos spams si nécessaire.</>
           )}
@@ -206,19 +207,34 @@ const Register = () => {
           <Input id="password" type="password" required minLength={6} value={form.password} onChange={(e) => set("password", e.target.value)} />
           <div className="text-xs text-muted-foreground mt-1">Minimum 6 caractères.</div>
         </div>
+
         <div>
           <Label htmlFor="phone">Téléphone</Label>
-          <Input
-            id="phone"
-            required
-            value={form.phone}
-            onChange={(e) => set("phone", e.target.value)}
-            placeholder="+237 6XX XXX XXX"
-          />
+          <div className="flex mt-1">
+            <span className="inline-flex items-center px-3 rounded-l-sm border border-r-0 border-input bg-muted text-sm font-medium text-muted-foreground">
+              🇨🇲 +237
+            </span>
+            <Input
+              id="phone"
+              required
+              value={form.phone.replace(/^\+237/, "")}
+              onChange={(e) => {
+                const digits = e.target.value.replace(/\D/g, "").slice(0, 9);
+                set("phone", "+237" + digits);
+              }}
+              placeholder="6XX XXX XXX"
+              className="rounded-l-none"
+              maxLength={9}
+            />
+          </div>
           <div className="text-xs text-muted-foreground mt-1">
             Obligatoire — utilisé pour la vérification par SMS si vous le choisissez ci-dessous.
           </div>
         </div>
+
+
+
+
         <div>
           <Label>Ville</Label>
           <Select value={form.city} onValueChange={(v) => set("city", v)}>

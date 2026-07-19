@@ -15,6 +15,12 @@ from fastapi.responses import StreamingResponse
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel as PydanticModel
+from email_service import generate_otp, send_otp_email, send_reset_email, send_shop_approved_email, send_shop_rejected_email
+from models import (
+    RegisterRequest, LoginRequest, ShopCreate, ShopUpdate, ShopRejectRequest,
+    ProductCreate, ProductUpdate, CheckoutRequest, OrderStatusUpdate,
+    ReviewCreate, BannerCreate, SubscriptionUpgrade, now_iso, new_id,
+)
 
 from auth import (
     hash_password, verify_password, create_access_token, create_refresh_token,
@@ -374,14 +380,20 @@ async def create_shop(payload: ShopCreate, user: dict = Depends(role_required("v
         "logo_url": payload.logo_url,
         "cover_url": payload.cover_url,
         "whatsapp": payload.whatsapp,
+        "identity_doc_type": payload.identity_doc_type,
+        "identity_doc_url": payload.identity_doc_url,
+        "business_reg_doc_url": payload.business_reg_doc_url,
         "status": "pending",
         "is_premium": user.get("subscription_plan") == "premium",
+        "is_verified": False,
+        "rejection_reason": None,
         "rating_avg": 0.0,
         "created_at": now_iso(),
     }
     await db.shops.insert_one(shop)
     shop.pop("_id", None)
     return shop
+
 
 
 @api.get("/shops")
@@ -426,22 +438,66 @@ async def update_shop(shop_id: str, payload: ShopUpdate, user: dict = Depends(cu
     out = await db.shops.find_one({"id": shop_id}, {"_id": 0})
     return out
 
-
 @api.post("/admin/shops/{shop_id}/approve")
 async def approve_shop(shop_id: str, user: dict = Depends(role_required("admin"))):
-    res = await db.shops.update_one({"id": shop_id}, {"$set": {"status": "approved"}})
-    if not res.matched_count:
+    shop = await db.shops.find_one({"id": shop_id})
+    if not shop:
         raise HTTPException(status_code=404, detail="Boutique introuvable")
+    await db.shops.update_one(
+        {"id": shop_id},
+        {"$set": {"status": "approved", "is_verified": True, "rejection_reason": None}}
+    )
+    vendor = await db.users.find_one({"id": shop["vendor_id"]})
+    if vendor:
+        try:
+            await send_shop_approved_email(vendor["email"], vendor["full_name"], shop["name"])
+        except Exception as e:
+            logger.error(f"Shop approved email failed: {e}")
     return {"ok": True}
 
 
 @api.post("/admin/shops/{shop_id}/reject")
-async def reject_shop(shop_id: str, user: dict = Depends(role_required("admin"))):
-    res = await db.shops.update_one({"id": shop_id}, {"$set": {"status": "rejected"}})
-    if not res.matched_count:
+async def reject_shop(shop_id: str, payload: ShopRejectRequest, user: dict = Depends(role_required("admin"))):
+    shop = await db.shops.find_one({"id": shop_id})
+    if not shop:
         raise HTTPException(status_code=404, detail="Boutique introuvable")
+    await db.shops.update_one(
+        {"id": shop_id},
+        {"$set": {"status": "rejected", "is_verified": False, "rejection_reason": payload.reason}}
+    )
+    vendor = await db.users.find_one({"id": shop["vendor_id"]})
+    if vendor:
+        try:
+            await send_shop_rejected_email(vendor["email"], vendor["full_name"], payload.reason)
+        except Exception as e:
+            logger.error(f"Shop rejected email failed: {e}")
     return {"ok": True}
 
+class ShopResubmitDocs(PydanticModel):
+    identity_doc_type: str
+    identity_doc_url: str
+    business_reg_doc_url: str
+
+
+@api.patch("/shops/mine/resubmit-documents")
+async def resubmit_shop_documents(payload: ShopResubmitDocs, user: dict = Depends(role_required("vendor"))):
+    shop = await db.shops.find_one({"vendor_id": user["id"]})
+    if not shop:
+        raise HTTPException(status_code=404, detail="Boutique introuvable")
+    if shop["status"] != "rejected":
+        raise HTTPException(status_code=400, detail="Seule une boutique rejetée peut re-soumettre des documents")
+    await db.shops.update_one(
+        {"id": shop["id"]},
+        {"$set": {
+            "identity_doc_type": payload.identity_doc_type,
+            "identity_doc_url": payload.identity_doc_url,
+            "business_reg_doc_url": payload.business_reg_doc_url,
+            "status": "pending",
+            "rejection_reason": None,
+        }}
+    )
+    out = await db.shops.find_one({"id": shop["id"]}, {"_id": 0})
+    return out
 
 # ============ PRODUCTS ============
 async def _check_product_limit(vendor_id: str, plan: str):
@@ -572,7 +628,7 @@ async def delete_product(product_id: str, user: dict = Depends(current_user)):
 
 # ============ UPLOAD ============
 @api.post("/upload")
-async def upload_file(file: UploadFile = File(...), user: dict = Depends(current_user)):
+async def upload_file(file: UploadFile = File(...), sensitive: bool = False, user: dict = Depends(current_user)):
     ext = (file.filename.rsplit(".", 1)[-1] if "." in file.filename else "bin").lower()
     if ext not in ("jpg", "jpeg", "png", "webp", "gif", "pdf"):
         raise HTTPException(status_code=400, detail="Type de fichier non supporté")
@@ -598,16 +654,24 @@ async def upload_file(file: UploadFile = File(...), user: dict = Depends(current
         "content_type": content_type,
         "size": result.get("size", len(data)),
         "is_deleted": False,
+        "is_sensitive": sensitive,
         "created_at": now_iso(),
     })
     return {"id": file_id, "url": f"/api/files/{file_id}", "path": result["path"]}
 
 
 @api.get("/files/{file_id}")
-async def serve_file(file_id: str):
+async def serve_file(file_id: str, request: Request):
     rec = await db.files.find_one({"id": file_id, "is_deleted": False})
     if not rec:
         raise HTTPException(status_code=404, detail="Fichier introuvable")
+    if rec.get("is_sensitive"):
+        try:
+            requester = await get_current_user(request, db)
+        except Exception:
+            raise HTTPException(status_code=401, detail="Authentification requise")
+        if requester["id"] != rec["owner_id"] and requester["role"] != "admin":
+            raise HTTPException(status_code=403, detail="Accès non autorisé à ce document")
     try:
         data, ct = get_object(rec["storage_path"])
     except Exception:

@@ -52,7 +52,16 @@ class ShopCreate(BaseModel):
     logo_url: Optional[str] = None
     cover_url: Optional[str] = None
     whatsapp: Optional[str] = None
+    identity_doc_type: str  # "cni" | "passeport"
+    identity_doc_url: str
+    business_reg_doc_url: str
 
+    @field_validator("identity_doc_type")
+    @classmethod
+    def validate_doc_type(cls, v):
+        if v not in ("cni", "passeport"):
+            raise ValueError("Type de document invalide (cni ou passeport)")
+        return v
 
 class ShopUpdate(BaseModel):
     name: Optional[str] = None
@@ -62,6 +71,8 @@ class ShopUpdate(BaseModel):
     cover_url: Optional[str] = None
     whatsapp: Optional[str] = None
 
+class ShopRejectRequest(BaseModel):
+    reason: str = Field(min_length=3)
 
 # ===== PRODUCT =====
 class ProductCreate(BaseModel):
