@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
-import { api, formatApiError } from "@/lib/api";
+import { api, formatApiError, fileUrl } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { Check, X, Store, MapPin, FileText, IdCard } from "lucide-react";
+import { Check, X, MapPin, FileText, IdCard } from "lucide-react";
 
 const STATUS_LABELS = { pending: "En attente", approved: "Validée", rejected: "Refusée" };
 const STATUS_COLORS = {
@@ -56,6 +56,8 @@ const AdminShops = () => {
   };
 
   const filtered = shops.filter((s) => s.status === tab);
+  const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
+  const buildDocUrl = (url) => (url?.startsWith("http") ? url : `${BACKEND_URL}${url}`);
 
   return (
     <div className="space-y-6">
@@ -91,17 +93,17 @@ const AdminShops = () => {
                     <div className="mt-4 pt-4 border-t border-border space-y-2">
                       <div className="text-xs uppercase tracking-widest text-muted-foreground mb-2">Documents fournis</div>
                       {s.identity_doc_url && (
-                        <a href={s.identity_doc_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-sm text-primary hover:underline">
-                          <IdCard className="w-4 h-4" />
-                          {s.identity_doc_type === "passeport" ? "Passeport" : "CNI"}
-                        </a>
-                      )}
-                      {s.business_reg_doc_url && (
-                        <a href={s.business_reg_doc_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-sm text-primary hover:underline">
-                          <FileText className="w-4 h-4" />
-                          Attestation d'immatriculation
-                        </a>
-                      )}
+                      <a href={buildDocUrl(s.identity_doc_url)} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-sm text-primary hover:underline">
+                        <IdCard className="w-4 h-4" />
+                        {s.identity_doc_type === "passeport" ? "Passeport" : "CNI"}
+                      </a>
+                    )}
+                    {s.business_reg_doc_url && (
+                      <a href={buildDocUrl(s.business_reg_doc_url)} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-sm text-primary hover:underline">
+                        <FileText className="w-4 h-4" />
+                        Attestation d'immatriculation
+                      </a>
+                    )}
                     </div>
                   )}
 

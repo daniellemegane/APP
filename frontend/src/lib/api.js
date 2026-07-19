@@ -1,5 +1,6 @@
 import axios from "axios";
 
+
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 export const API = `${BACKEND_URL}/api`;
 
@@ -9,6 +10,8 @@ export const api = axios.create({
 });
 
 export const fileUrl = (id) => (id ? `${API}/files/${id}` : null);
+
+export const buildDocUrl = (docId) => `${API}/files/${docId}`;
 
 export const formatPrice = (n) => {
   if (n == null) return "—";
