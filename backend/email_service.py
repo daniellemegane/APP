@@ -73,7 +73,8 @@ async def send_reset_email(to_email: str, otp: str, full_name: str):
         "subject": "🔑 Réinitialisation de votre mot de passe Elles Market",
         "html": html,
     })
-    async def send_shop_approved_email(to_email: str, full_name: str, shop_name: str):
+    
+async def send_shop_approved_email(to_email: str, full_name: str, shop_name: str):
     html = f"""
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
         <div style="background: linear-gradient(135deg, #E91E8C, #9C27B0); padding: 30px; text-align: center;">
