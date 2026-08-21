@@ -25,6 +25,16 @@ const VendorOrders = () => {
     }
   };
 
+  const markPaid = async (id) => {
+    try {
+      await api.patch(`/orders/${id}/mark-paid`);
+      toast.success("Commande marquée comme payée");
+      load();
+    } catch (e) {
+      toast.error(formatApiError(e));
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div>
@@ -48,7 +58,21 @@ const VendorOrders = () => {
                   <div className="text-right">
                     <div className="font-display font-bold text-primary">{formatPrice(o.total)}</div>
                     <div className="text-xs text-muted-foreground">Net: {formatPrice(o.vendor_payout)} · Comm. {formatPrice(o.commission)}</div>
+                    {o.payment_status === "paid" ? (
+                      <Badge className="bg-success text-background rounded-full mt-1">Payée</Badge>
+                    ) : (
+                      <Badge className="bg-secondary text-secondary-foreground rounded-full mt-1">Paiement en attente</Badge>
+                    )}
                   </div>
+                  {o.payment_status !== "paid" && (
+                    <button
+                      onClick={() => markPaid(o.id)}
+                      className="text-xs text-primary hover:underline whitespace-nowrap"
+                      data-testid={`mark-paid-${o.id}`}
+                    >
+                      Marquer payée
+                    </button>
+                  )}
                   <Select value={o.status} onValueChange={(v) => updateStatus(o.id, v)}>
                     <SelectTrigger className="w-40" data-testid={`order-status-select-${o.id}`}><SelectValue /></SelectTrigger>
                     <SelectContent>

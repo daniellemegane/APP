@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { toast } from "sonner";
-import { CreditCard, Smartphone, Loader2, CheckCircle, Clock } from "lucide-react";
+import { CreditCard, Smartphone, Loader2, CheckCircle, Clock, MessageCircle } from "lucide-react";
 
 const Checkout = () => {
   const { items, subtotal, clear } = useCart();
@@ -21,7 +21,7 @@ const Checkout = () => {
     shipping_address: "",
     shipping_city: user?.city || "",
     shipping_phone: user?.phone || "",
-    payment_method: "mtn_momo",
+    payment_method: "whatsapp",
     notes: "",
   });
   const [busy, setBusy] = useState(false);
@@ -100,9 +100,25 @@ const Checkout = () => {
         } else {
           throw new Error("Échec initiation paiement MTN");
         }
+      } else if (form.payment_method === "whatsapp") {
+        // Redirection vers WhatsApp pour finaliser le paiement avec la vendeuse
+        const message = encodeURIComponent(
+          `Bonjour ! Je souhaite finaliser ma commande N° ${order.order_number}.\n\n` +
+          items.map((i) => `- ${i.quantity} × ${i.name}`).join("\n") +
+          `\n\nTotal : ${formatPrice(total)}\nAdresse de livraison : ${form.shipping_address}, ${form.shipping_city}`
+        );
+        const whatsappNumber = (order.shop_whatsapp || "").replace(/\D/g, "");
+        if (whatsappNumber) {
+          window.open(`https://wa.me/${whatsappNumber}?text=${message}`, "_blank");
+        } else {
+          toast.warning("La vendeuse n'a pas encore renseigné son numéro WhatsApp. Elle vous contactera directement.");
+        }
+        toast.success("Commande enregistrée ! Finalisez le paiement avec la vendeuse sur WhatsApp.");
+        clear();
+        navigate("/commande-confirmee", { state: { orders: data.orders } });
       } else {
         // Orange Money / Carte — simulation pour l'instant
-        toast.success("Paiement validé ! Commande passée avec succès.");
+        toast.success("Commande enregistrée ! Paiement à confirmer.");
         clear();
         navigate("/commande-confirmee", { state: { orders: data.orders } });
       }
@@ -162,7 +178,7 @@ const Checkout = () => {
                 </Select>
               </div>
               <div>
-                <Label>Téléphone MTN</Label>
+                <Label>Téléphone</Label>
                 <Input required value={form.shipping_phone} onChange={(e) => set("shipping_phone", e.target.value)} placeholder="+237 6…" />
               </div>
             </div>
@@ -176,12 +192,20 @@ const Checkout = () => {
             <h2 className="font-display font-semibold text-xl">Mode de paiement</h2>
             <RadioGroup value={form.payment_method} onValueChange={(v) => set("payment_method", v)} className="grid gap-3">
               {[
-                { v: "mtn_momo", t: "MTN Mobile Money", sub: "Paiement réel via sandbox MTN", icon: Smartphone, c: "bg-[#FFCC00]" },
-                { v: "orange_money", t: "Orange Money", sub: "Simulation (intégration à venir)", icon: Smartphone, c: "bg-[#FF6600]" },
-                { v: "card", t: "Carte Visa / Mastercard", sub: "Simulation (intégration à venir)", icon: CreditCard, c: "bg-foreground" },
+                { v: "mtn_momo", t: "MTN Mobile Money", sub: "Bientôt disponible", icon: Smartphone, c: "bg-[#FFCC00]", disabled: true },
+                { v: "whatsapp", t: "Finaliser sur WhatsApp", sub: "Contactez la vendeuse directement pour le paiement", icon: MessageCircle, c: "bg-[#25D366]", disabled: false },
+                { v: "orange_money", t: "Orange Money", sub: "Bientôt disponible", icon: Smartphone, c: "bg-[#FF6600]", disabled: true },
+                { v: "card", t: "Carte Visa / Mastercard", sub: "Bientôt disponible", icon: CreditCard, c: "bg-foreground", disabled: true },
               ].map((p) => (
-                <label key={p.v} className={`p-4 border-2 rounded-sm cursor-pointer flex items-center gap-3 ${form.payment_method === p.v ? "border-primary bg-primary/5" : "border-border"}`}>
-                  <RadioGroupItem value={p.v} id={`pay-${p.v}`} />
+                <label
+                  key={p.v}
+                  className={`p-4 border-2 rounded-sm flex items-center gap-3 ${
+                    p.disabled
+                      ? "opacity-50 cursor-not-allowed border-border"
+                      : `cursor-pointer ${form.payment_method === p.v ? "border-primary bg-primary/5" : "border-border"}`
+                  }`}
+                >
+                  <RadioGroupItem value={p.v} id={`pay-${p.v}`} disabled={p.disabled} />
                   <span className={`w-8 h-8 rounded-full ${p.c} text-background flex items-center justify-center`}><p.icon className="w-4 h-4" /></span>
                   <div>
                     <span className="font-medium block">{p.t}</span>
