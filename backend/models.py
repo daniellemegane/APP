@@ -54,7 +54,7 @@ class ShopCreate(BaseModel):
     whatsapp: str
     identity_doc_type: str  # "cni" | "passeport"
     identity_doc_url: str
-    business_reg_doc_url: str
+    business_reg_doc_url: Optional[str] = None
 
     @field_validator("whatsapp")
     @classmethod

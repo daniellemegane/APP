@@ -71,8 +71,8 @@ const VendorShop = () => {
   const submit = async (e) => {
     e.preventDefault();
 
-    if (needsDocuments && (!form.identity_doc_url || !form.business_reg_doc_url)) {
-      toast.error("Merci de fournir votre pièce d'identité et votre attestation d'immatriculation.");
+    if (needsDocuments && !form.identity_doc_url) {
+      toast.error("Merci de fournir votre pièce d'identité.");
       return;
     }
 
@@ -218,25 +218,28 @@ const VendorShop = () => {
               )}
             </div>
 
-            <div>
+                        <div className="opacity-60">
               <Label className="flex items-center gap-2">
                 <FileText className="w-4 h-4" />
                 Attestation d'immatriculation
+                <span className="text-[10px] uppercase tracking-wide bg-muted-foreground/20 text-muted-foreground px-2 py-0.5 rounded-full normal-case">
+                  Bientôt requis
+                </span>
               </Label>
+              <p className="text-xs text-muted-foreground mt-1">
+                Facultatif pour le moment — deviendra obligatoire prochainement. Vous serez prévenue avant l'échéance.
+              </p>
               <Input
                 type="file"
                 accept=".jpg,.jpeg,.png,.webp,.gif,.pdf"
-                onChange={(e) => uploadDoc(e.target.files[0], "business_reg_doc_url", setUploadingBizReg)}
-                className="mt-1"
+                disabled
+                className="mt-1 cursor-not-allowed"
               />
-              {uploadingBizReg && <div className="text-xs text-muted-foreground mt-1">Téléversement…</div>}
-              {form.business_reg_doc_url && !uploadingBizReg && (
-                <div className="text-xs text-green-600 mt-1 flex items-center gap-1">
-                  <UploadCloud className="w-3 h-3" /> Document reçu
-                </div>
-              )}
             </div>
           </div>
+        
+          
+          
         )}
 
         <Button
