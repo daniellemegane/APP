@@ -102,21 +102,26 @@ const Checkout = () => {
         }
       } else if (form.payment_method === "whatsapp") {
         // Redirection vers WhatsApp pour finaliser le paiement avec la vendeuse
-        const message = encodeURIComponent(
-          `Bonjour ! Je souhaite finaliser ma commande N° ${order.order_number}.\n\n` +
-          items.map((i) => `- ${i.quantity} × ${i.name}`).join("\n") +
-          `\n\nTotal : ${formatPrice(total)}\nAdresse de livraison : ${form.shipping_address}, ${form.shipping_city}`
+        const orders = data.orders;
+        const firstOrder = orders[0];
+        const buildMessage = (o) => encodeURIComponent(
+          `Bonjour ! Je souhaite finaliser ma commande N° ${o.order_number}.\n\n` +
+          o.items.map((i) => `- ${i.quantity} × ${i.name}`).join("\n") +
+          `\n\nTotal : ${formatPrice(o.total)}\nAdresse de livraison : ${form.shipping_address}, ${form.shipping_city}`
         );
-        const whatsappNumber = (order.shop_whatsapp || "").replace(/\D/g, "");
-        if (whatsappNumber) {
-          window.location.href = `https://wa.me/${whatsappNumber}?text=${message}`;
+        const whatsappNumber = (firstOrder.shop_whatsapp || "").replace(/\D/g, "");
+
+        if (!whatsappNumber) {
+          setError("Cette boutique n'a pas encore renseigné son numéro WhatsApp. Contactez le support.");
+          setPaymentStep(null);
+          setBusy(false);
           return;
-        } else {
-          toast.warning("La vendeuse n'a pas encore renseigné son numéro WhatsApp. Elle vous contactera directement.");
         }
-        toast.success("Commande enregistrée ! Finalisez le paiement avec la vendeuse sur WhatsApp.");
+
         clear();
-        navigate("/commande-confirmee", { state: { orders: data.orders } });
+        // Commandes des autres boutiques (si panier multi-vendeuses) à contacter manuellement
+        navigate("/commande-confirmee", { state: { orders, pendingWhatsapp: orders.slice(1) } });
+        window.location.href = `https://wa.me/${whatsappNumber}?text=${buildMessage(firstOrder)}`;
       } else {
         // Orange Money / Carte — simulation pour l'instant
         toast.success("Commande enregistrée ! Paiement à confirmer.");
