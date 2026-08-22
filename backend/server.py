@@ -699,6 +699,8 @@ async def checkout(payload: CheckoutRequest, user: dict = Depends(role_required(
         vendor_id = items[0][0]["vendor_id"]
         vendor = await db.users.find_one({"id": vendor_id})
         plan = vendor.get("subscription_plan", "free") if vendor else "free"
+        shop = await db.shops.find_one({"id": shop_id})
+        shop_whatsapp = shop.get("whatsapp") if shop else None
         order_items = []
         subtotal = 0.0
         for prod, qty in items:
@@ -735,7 +737,8 @@ async def checkout(payload: CheckoutRequest, user: dict = Depends(role_required(
             "vendor_plan": plan,
             "status": "pending",
             "payment_method": payload.payment_method,
-            "payment_status": "paid",
+            "payment_status": "pending",
+            "shop_whatsapp": shop_whatsapp,
             "shipping_address": payload.shipping_address,
             "shipping_city": payload.shipping_city,
             "shipping_phone": payload.shipping_phone,
@@ -796,6 +799,24 @@ async def update_order_status(order_id: str, payload: OrderStatusUpdate, user: d
          "$push": {"status_history": {"status": payload.status, "at": now_iso()}}}
     )
     return {"ok": True, "status": payload.status}
+
+class MarkPaidRequest(PydanticModel):
+    pass
+
+
+@api.patch("/orders/{order_id}/mark-paid")
+async def mark_order_paid(order_id: str, user: dict = Depends(current_user)):
+    order = await db.orders.find_one({"id": order_id})
+    if not order:
+        raise HTTPException(status_code=404, detail="Commande introuvable")
+    if user["role"] not in ("admin", "vendor") or (user["role"] == "vendor" and order["vendor_id"] != user["id"]):
+        raise HTTPException(status_code=403, detail="Non autorisé")
+    await db.orders.update_one(
+        {"id": order_id},
+        {"$set": {"payment_status": "paid"},
+         "$push": {"status_history": {"status": "payment_confirmed_manually", "at": now_iso()}}}
+    )
+    return {"ok": True, "payment_status": "paid"}
 
 
 # ============ REVIEWS ============

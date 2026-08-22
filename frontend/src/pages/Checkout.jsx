@@ -109,7 +109,8 @@ const Checkout = () => {
         );
         const whatsappNumber = (order.shop_whatsapp || "").replace(/\D/g, "");
         if (whatsappNumber) {
-          window.open(`https://wa.me/${whatsappNumber}?text=${message}`, "_blank");
+          window.location.href = `https://wa.me/${whatsappNumber}?text=${message}`;
+          return;
         } else {
           toast.warning("La vendeuse n'a pas encore renseigné son numéro WhatsApp. Elle vous contactera directement.");
         }
