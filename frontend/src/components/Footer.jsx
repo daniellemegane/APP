@@ -30,8 +30,16 @@ const Footer = () => (
       </div>
     </div>
     <div className="border-t border-white/10">
-      <div className="max-w-7xl mx-auto px-6 lg:px-10 py-6 text-xs text-[#FDFBF7]/50 flex justify-between flex-wrap gap-2">
-        <span>© {new Date().getFullYear()} Elles Market — Tous droits réservés.</span>
+      <div className="max-w-7xl mx-auto px-6 lg:px-10 py-6 text-xs text-[#FDFBF7]/50 flex flex-col md:flex-row justify-between flex-wrap gap-3">
+        <div className="flex flex-wrap items-center gap-4">
+          <span>© {new Date().getFullYear()} Elles Market — Tous droits réservés.</span>
+          <Link to="/confidentialite" className="hover:text-secondary transition-colors underline underline-offset-2">
+            Politique de confidentialité
+          </Link>
+          <Link to="/mentions-legales" className="hover:text-secondary transition-colors underline underline-offset-2">
+            Mentions légales
+          </Link>
+        </div>
         <span className="font-serif italic">Fait avec passion à Yaoundé · Douala · Bafoussam</span>
       </div>
     </div>

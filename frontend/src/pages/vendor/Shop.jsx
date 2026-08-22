@@ -179,6 +179,7 @@ const VendorShop = () => {
             </div>
             <p className="text-xs text-muted-foreground">
               Ces documents sont confidentiels et uniquement consultés par notre équipe de vérification.
+              Consultez notre <a href="/confidentialite" target="_blank" className="text-primary underline">politique de confidentialité</a>.
             </p>
 
             <div>

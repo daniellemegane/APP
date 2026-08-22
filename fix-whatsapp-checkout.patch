@@ -1,0 +1,87 @@
+diff --git a/backend/server.py b/backend/server.py
+index 32bd416..9d74a38 100644
+--- a/backend/server.py
++++ b/backend/server.py
+@@ -699,6 +699,8 @@ async def checkout(payload: CheckoutRequest, user: dict = Depends(role_required(
+         vendor_id = items[0][0]["vendor_id"]
+         vendor = await db.users.find_one({"id": vendor_id})
+         plan = vendor.get("subscription_plan", "free") if vendor else "free"
++        shop = await db.shops.find_one({"id": shop_id})
++        shop_whatsapp = shop.get("whatsapp") if shop else None
+         order_items = []
+         subtotal = 0.0
+         for prod, qty in items:
+@@ -735,7 +737,8 @@ async def checkout(payload: CheckoutRequest, user: dict = Depends(role_required(
+             "vendor_plan": plan,
+             "status": "pending",
+             "payment_method": payload.payment_method,
+-            "payment_status": "paid",
++            "payment_status": "pending",
++            "shop_whatsapp": shop_whatsapp,
+             "shipping_address": payload.shipping_address,
+             "shipping_city": payload.shipping_city,
+             "shipping_phone": payload.shipping_phone,
+@@ -798,6 +801,21 @@ async def update_order_status(order_id: str, payload: OrderStatusUpdate, user: d
+     return {"ok": True, "status": payload.status}
+ 
+ 
++@api.patch("/orders/{order_id}/mark-paid")
++async def mark_order_paid(order_id: str, user: dict = Depends(current_user)):
++    order = await db.orders.find_one({"id": order_id})
++    if not order:
++        raise HTTPException(status_code=404, detail="Commande introuvable")
++    if user["role"] not in ("admin", "vendor") or (user["role"] == "vendor" and order["vendor_id"] != user["id"]):
++        raise HTTPException(status_code=403, detail="Non autorisé")
++    await db.orders.update_one(
++        {"id": order_id},
++        {"$set": {"payment_status": "paid"},
++         "$push": {"status_history": {"status": "payment_confirmed_manually", "at": now_iso()}}}
++    )
++    return {"ok": True, "payment_status": "paid"}
++
++
+ # ============ REVIEWS ============
+ @api.post("/reviews")
+ async def create_review(payload: ReviewCreate, user: dict = Depends(role_required("customer"))):
+diff --git a/frontend/src/pages/Checkout.jsx b/frontend/src/pages/Checkout.jsx
+index 4616a92..60a92cc 100644
+--- a/frontend/src/pages/Checkout.jsx
++++ b/frontend/src/pages/Checkout.jsx
+@@ -102,20 +102,26 @@ const Checkout = () => {
+         }
+       } else if (form.payment_method === "whatsapp") {
+         // Redirection vers WhatsApp pour finaliser le paiement avec la vendeuse
+-        const message = encodeURIComponent(
+-          `Bonjour ! Je souhaite finaliser ma commande N° ${order.order_number}.\n\n` +
+-          items.map((i) => `- ${i.quantity} × ${i.name}`).join("\n") +
+-          `\n\nTotal : ${formatPrice(total)}\nAdresse de livraison : ${form.shipping_address}, ${form.shipping_city}`
++        const orders = data.orders;
++        const firstOrder = orders[0];
++        const buildMessage = (o) => encodeURIComponent(
++          `Bonjour ! Je souhaite finaliser ma commande N° ${o.order_number}.\n\n` +
++          o.items.map((i) => `- ${i.quantity} × ${i.name}`).join("\n") +
++          `\n\nTotal : ${formatPrice(o.total)}\nAdresse de livraison : ${form.shipping_address}, ${form.shipping_city}`
+         );
+-        const whatsappNumber = (order.shop_whatsapp || "").replace(/\D/g, "");
+-        if (whatsappNumber) {
+-          window.open(`https://wa.me/${whatsappNumber}?text=${message}`, "_blank");
+-        } else {
+-          toast.warning("La vendeuse n'a pas encore renseigné son numéro WhatsApp. Elle vous contactera directement.");
++        const whatsappNumber = (firstOrder.shop_whatsapp || "").replace(/\D/g, "");
++
++        if (!whatsappNumber) {
++          setError("Cette boutique n'a pas encore renseigné son numéro WhatsApp. Contactez le support.");
++          setPaymentStep(null);
++          setBusy(false);
++          return;
+         }
+-        toast.success("Commande enregistrée ! Finalisez le paiement avec la vendeuse sur WhatsApp.");
++
+         clear();
+-        navigate("/commande-confirmee", { state: { orders: data.orders } });
++        // Commandes des autres boutiques (si panier multi-vendeuses) à contacter manuellement
++        navigate("/commande-confirmee", { state: { orders, pendingWhatsapp: orders.slice(1) } });
++        window.location.href = `https://wa.me/${whatsappNumber}?text=${buildMessage(firstOrder)}`;
+       } else {
+         // Orange Money / Carte — simulation pour l'instant
+         toast.success("Commande enregistrée ! Paiement à confirmer.");

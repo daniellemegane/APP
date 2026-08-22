@@ -5,6 +5,8 @@ import { CartProvider } from "@/contexts/CartContext";
 import { Toaster } from "@/components/ui/sonner";
 import ForgotPassword from "@/pages/ForgotPassword";
 import { DeleteAccount } from "@/pages/DeleteAccount";
+import Confidentialite from "@/pages/Confidentialite";
+import MentionsLegales from "@/pages/MentionsLegales";
 
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
@@ -73,6 +75,8 @@ function App() {
             <Route path="/checkout" element={<Shell><ProtectedRoute roles={["customer"]}><Checkout /></ProtectedRoute></Shell>} />
             <Route path="/commande-confirmee" element={<Shell><ProtectedRoute roles={["customer"]}><OrderSuccess /></ProtectedRoute></Shell>} />
             <Route path="/a-propos" element={<Shell><About /></Shell>} />
+            <Route path="/confidentialite" element={<Shell><Confidentialite /></Shell>} />
+            <Route path="/mentions-legales" element={<Shell><MentionsLegales /></Shell>} />
             <Route path="/mes-commandes" element={<Shell><ProtectedRoute roles={["customer"]}><CustomerOrders /></ProtectedRoute></Shell>} />
 
             <Route path="/vendeuse" element={<ProtectedRoute roles={["vendor"]}><VendorLayout /></ProtectedRoute>}>
