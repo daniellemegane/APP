@@ -167,7 +167,7 @@ const VendorShop = () => {
           </div>
           <div>
             <Label>WhatsApp</Label>
-            <Input value={form.whatsapp} onChange={(e) => set("whatsapp", e.target.value)} placeholder="+237 6…" data-testid="shop-whatsapp-input" />
+            <Input required value={form.whatsapp} onChange={(e) => set("whatsapp", e.target.value)} placeholder="+237 6…" data-testid="shop-whatsapp-input" />
           </div>
         </div>
 

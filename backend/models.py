@@ -51,10 +51,18 @@ class ShopCreate(BaseModel):
     city: str
     logo_url: Optional[str] = None
     cover_url: Optional[str] = None
-    whatsapp: Optional[str] = None
+    whatsapp: str
     identity_doc_type: str  # "cni" | "passeport"
     identity_doc_url: str
     business_reg_doc_url: str
+
+    @field_validator("whatsapp")
+    @classmethod
+    def validate_whatsapp(cls, v):
+        digits = "".join(c for c in v if c.isdigit())
+        if len(digits) < 8:
+            raise ValueError("Numéro WhatsApp invalide. Merci d'indiquer un numéro valide avec l'indicatif (ex: +237 6XX XXX XXX).")
+        return v
 
     @field_validator("identity_doc_type")
     @classmethod
