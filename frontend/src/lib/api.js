@@ -9,6 +9,43 @@ export const api = axios.create({
   withCredentials: true,
 });
 
+// Jeton stocké localement : les navigateurs mobiles bloquent le cookie tiers du backend.
+const TOKEN_KEY = "access_token";
+
+export const getToken = () => {
+  try { return localStorage.getItem(TOKEN_KEY); } catch { return null; }
+};
+
+export const setToken = (token) => {
+  try {
+    if (token) localStorage.setItem(TOKEN_KEY, token);
+    else localStorage.removeItem(TOKEN_KEY);
+  } catch {}
+};
+
+export const clearToken = () => setToken(null);
+
+api.interceptors.request.use((config) => {
+  const token = getToken();
+  if (token) config.headers.Authorization = `Bearer ${token}`;
+  return config;
+});
+
+api.interceptors.response.use(
+  (res) => res,
+  (error) => {
+    if (error?.response?.status === 401) {
+      clearToken();
+      // Les appels /auth/* (mauvais mot de passe, /auth/me au démarrage) gèrent eux-mêmes leur 401.
+      const isAuthCall = (error.config?.url || "").startsWith("/auth/");
+      if (!isAuthCall && window.location.pathname !== "/connexion") {
+        window.location.assign("/connexion");
+      }
+    }
+    return Promise.reject(error);
+  }
+);
+
 export const fileUrl = (id) => (id ? `${API}/files/${id}` : null);
 
 export const buildDocUrl = (docId) => `${API}/files/${docId}`;

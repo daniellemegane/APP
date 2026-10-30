@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, useCallback } from "react";
-import { api, formatApiError } from "../lib/api";
+import { api, formatApiError, getToken, setToken, clearToken } from "../lib/api";
 
 const AuthCtx = createContext(null);
 
@@ -8,6 +8,10 @@ export const AuthProvider = ({ children }) => {
   const [error, setError] = useState("");
 
   const refresh = useCallback(async () => {
+    if (!getToken()) {
+      setUser(null);
+      return;
+    }
     try {
       const { data } = await api.get("/auth/me");
       setUser(data);
@@ -24,6 +28,7 @@ export const AuthProvider = ({ children }) => {
     setError("");
     try {
       const { data } = await api.post("/auth/login", { email, password });
+      setToken(data.access_token);
       setUser(data.user);
       return data.user;
     } catch (e) {
@@ -50,12 +55,14 @@ export const AuthProvider = ({ children }) => {
 
   const logout = async () => {
     try { await api.post("/auth/logout"); } catch {}
+    clearToken();
     setUser(null);
   };
   const verifyOtp = async (email, otp) => {
   setError("");
   try {
     const { data } = await api.post(`/auth/verify-otp?email=${encodeURIComponent(email)}&otp=${otp}`);
+    setToken(data.access_token);
     setUser(data.user);
     return data.user;
   } catch (e) {
